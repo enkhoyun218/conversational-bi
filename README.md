@@ -1,5 +1,7 @@
 # Conversational BI
 
+**Live demo: [conversational-bi-deploy.streamlit.app](https://conversational-bi-deploy.streamlit.app/)**
+
 Ask a plain-English question about a dataset and get back the SQL that
 answered it, a chart, and the underlying data — no analyst in the loop.
 
