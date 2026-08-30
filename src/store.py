@@ -75,6 +75,17 @@ def delete_chart(chart_id: str) -> bool:
     return True
 
 
+def rename_chart(chart_id: str, new_name: str) -> bool:
+    """Update a chart's display name. Returns True if it existed."""
+    charts = _load_charts()
+    for chart in charts:
+        if chart["id"] == chart_id:
+            chart["name"] = new_name
+            _save_charts(charts)
+            return True
+    return False
+
+
 def _load_dashboards() -> list[dict]:
     if not os.path.exists(DASHBOARDS_FILE):
         return []
@@ -116,6 +127,17 @@ def list_dashboards() -> list[dict]:
     """All dashboard pages, in the order they were created (grouping
     runs are wholesale, not additive, so this is display order too)."""
     return _load_dashboards()
+
+
+def rename_dashboard(dashboard_id: str, new_title: str) -> bool:
+    """Update a dashboard page's title. Returns True if it existed."""
+    dashboards = _load_dashboards()
+    for dashboard in dashboards:
+        if dashboard["id"] == dashboard_id:
+            dashboard["title"] = new_title
+            _save_dashboards(dashboards)
+            return True
+    return False
 
 
 if __name__ == "__main__":

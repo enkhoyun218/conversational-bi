@@ -46,6 +46,29 @@ def _set_question(q: str) -> None:
     st.session_state["question"] = q
 
 
+def _rename_chart(chart_id: str, fallback: str) -> None:
+    """on_change callback for a chart's name field. Reverts to the prior
+    name instead of persisting blank -- a chart with no name would be
+    confusing everywhere it's listed."""
+    key = f"name_{chart_id}"
+    new_name = st.session_state[key].strip()
+    if not new_name:
+        st.session_state[key] = fallback
+        return
+    store.rename_chart(chart_id, new_name)
+
+
+def _rename_dashboard(dashboard_id: str, fallback: str) -> None:
+    """on_change callback for a dashboard page's title field. Same
+    revert-on-blank rule as _rename_chart."""
+    key = f"dashtitle_{dashboard_id}"
+    new_title = st.session_state[key].strip()
+    if not new_title:
+        st.session_state[key] = fallback
+        return
+    store.rename_dashboard(dashboard_id, new_title)
+
+
 def display_chart_result(df: pd.DataFrame, spec: dict) -> None:
     """Render a chart/metric/table for a validated spec + dataframe.
 
@@ -136,7 +159,14 @@ def render_chart_grid(charts: list[dict], cols_per_row: int = 2, show_delete: bo
         cols = st.columns(cols_per_row)
         for col, chart in zip(cols, row):
             with col, st.container(border=True):
-                st.markdown(f"**{chart['name']}**")
+                st.text_input(
+                    "Chart name",
+                    value=chart["name"],
+                    key=f"name_{chart['id']}",
+                    label_visibility="collapsed",
+                    on_change=_rename_chart,
+                    args=(chart["id"], chart["name"]),
+                )
                 if chart["name"] != chart["question"]:
                     st.caption(chart["question"])
 
@@ -188,6 +218,13 @@ def render_dashboards_view() -> None:
     charts_by_id = {c["id"]: c for c in charts}
 
     def render_page(page: dict) -> None:
+        st.text_input(
+            "Page title",
+            value=page["title"],
+            key=f"dashtitle_{page['id']}",
+            on_change=_rename_dashboard,
+            args=(page["id"], page["title"]),
+        )
         page_charts = [charts_by_id[cid] for cid in page["chart_ids"] if cid in charts_by_id]
         if not page_charts:
             st.caption("No charts on this page.")
@@ -195,9 +232,12 @@ def render_dashboards_view() -> None:
             render_chart_grid(page_charts)
 
     if len(dashboards) == 1:
-        st.subheader(dashboards[0]["title"])
         render_page(dashboards[0])
     else:
+        # Tab labels are static for the run that draws them -- editing a
+        # title here updates the store immediately, and the tab bar
+        # picks up the new label on the next rerun (e.g. the rerun the
+        # on_change itself triggers).
         tabs = st.tabs([d["title"] for d in dashboards])
         for tab, page in zip(tabs, dashboards):
             with tab:
