@@ -18,6 +18,7 @@ import streamlit as st
 import store
 from chart import render_chart, suggest_chart
 from db import get_connection, get_schema
+from grouping import group_charts
 from query import QueryExecutionError, answer_question, run_sql
 from validate import SQLValidationError
 
@@ -123,17 +124,13 @@ def render_ask_view() -> None:
             st.dataframe(df, use_container_width=True)
 
 
-def render_saved_charts_view() -> None:
-    st.title("Saved Charts")
-    charts = store.list_charts()
-
-    if not charts:
-        st.info("No charts saved yet -- ask a question first and it'll show up here.")
-        return
-
-    st.caption(f"{len(charts)} saved chart(s). Each re-runs its query on load, so data stays current.")
-
-    cols_per_row = 2
+def render_chart_grid(charts: list[dict], cols_per_row: int = 2, show_delete: bool = False) -> None:
+    """Render a grid of chart cards: name, a live-refreshed chart (its
+    SQL re-runs against DuckDB right here), and an optional delete
+    button. Shared by "Saved Charts" and the dashboard view below --
+    both are "show these charts in a grid," they just differ in which
+    subset of charts and whether delete makes sense.
+    """
     for row_start in range(0, len(charts), cols_per_row):
         row = charts[row_start : row_start + cols_per_row]
         cols = st.columns(cols_per_row)
@@ -149,13 +146,66 @@ def render_saved_charts_view() -> None:
                 except (SQLValidationError, QueryExecutionError) as e:
                     st.error(f"Couldn't refresh this chart: {e}")
 
-                if st.button("Delete", key=f"delete_{chart['id']}"):
+                if show_delete and st.button("Delete", key=f"delete_{chart['id']}"):
                     store.delete_chart(chart["id"])
                     st.rerun()
 
 
+def render_saved_charts_view() -> None:
+    st.title("Saved Charts")
+    charts = store.list_charts()
+
+    if not charts:
+        st.info("No charts saved yet -- ask a question first and it'll show up here.")
+        return
+
+    st.caption(f"{len(charts)} saved chart(s). Each re-runs its query on load, so data stays current.")
+    render_chart_grid(charts, show_delete=True)
+
+
+def render_dashboards_view() -> None:
+    st.title("Dashboards")
+    charts = store.list_charts()
+    dashboards = store.list_dashboards()
+
+    if not charts:
+        st.info("No saved charts yet -- ask a question first, then come back to build a dashboard.")
+        return
+
+    button_label = "Rebuild Dashboard" if dashboards else "Build Dashboard"
+    if st.button(button_label, type="primary"):
+        with st.spinner("Grouping your charts with Claude..."):
+            groups = group_charts(charts)
+            dashboards = store.save_dashboards(groups)
+
+    if not dashboards:
+        st.info(f'Click "{button_label}" to have Claude group your saved charts into pages automatically.')
+        return
+
+    # A chart can be deleted from "Saved Charts" after a dashboard was
+    # built around it -- skip ids that no longer resolve instead of
+    # crashing on a stale reference.
+    charts_by_id = {c["id"]: c for c in charts}
+
+    def render_page(page: dict) -> None:
+        page_charts = [charts_by_id[cid] for cid in page["chart_ids"] if cid in charts_by_id]
+        if not page_charts:
+            st.caption("No charts on this page.")
+        else:
+            render_chart_grid(page_charts)
+
+    if len(dashboards) == 1:
+        st.subheader(dashboards[0]["title"])
+        render_page(dashboards[0])
+    else:
+        tabs = st.tabs([d["title"] for d in dashboards])
+        for tab, page in zip(tabs, dashboards):
+            with tab:
+                render_page(page)
+
+
 with st.sidebar:
-    view = st.radio("View", ["Ask a Question", "Saved Charts"], key="view")
+    view = st.radio("View", ["Ask a Question", "Saved Charts", "Dashboards"], key="view")
 
     st.divider()
     st.subheader("Try an example")
@@ -170,5 +220,7 @@ with st.sidebar:
 
 if view == "Ask a Question":
     render_ask_view()
-else:
+elif view == "Saved Charts":
     render_saved_charts_view()
+else:
+    render_dashboards_view()
