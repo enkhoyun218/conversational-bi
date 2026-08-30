@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 STORE_DIR = os.path.join(os.path.dirname(__file__), "..", "store")
 CHARTS_FILE = os.path.join(STORE_DIR, "charts.json")
+DASHBOARDS_FILE = os.path.join(STORE_DIR, "dashboards.json")
 
 
 def _load_charts() -> list[dict]:
@@ -72,6 +73,49 @@ def delete_chart(chart_id: str) -> bool:
         return False
     _save_charts(remaining)
     return True
+
+
+def _load_dashboards() -> list[dict]:
+    if not os.path.exists(DASHBOARDS_FILE):
+        return []
+    with open(DASHBOARDS_FILE, "r") as f:
+        return json.load(f)
+
+
+def _save_dashboards(dashboards: list[dict]) -> None:
+    os.makedirs(STORE_DIR, exist_ok=True)
+    tmp_path = DASHBOARDS_FILE + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(dashboards, f, indent=2)
+    os.replace(tmp_path, DASHBOARDS_FILE)
+
+
+def save_dashboards(groups: list[dict]) -> list[dict]:
+    """Persist a fresh grouping, replacing whatever was there before.
+
+    `groups` is [{"title": str, "chart_ids": [str, ...]}, ...] (the
+    validated output of grouping.group_charts()). Each group gets an id
+    and an order field added here -- ordering charts within a page is
+    Step 6's concern, but the field needs to exist from the moment a
+    dashboard is first created.
+    """
+    dashboards = [
+        {
+            "id": str(uuid.uuid4()),
+            "title": group["title"],
+            "chart_ids": list(group["chart_ids"]),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        for group in groups
+    ]
+    _save_dashboards(dashboards)
+    return dashboards
+
+
+def list_dashboards() -> list[dict]:
+    """All dashboard pages, in the order they were created (grouping
+    runs are wholesale, not additive, so this is display order too)."""
+    return _load_dashboards()
 
 
 if __name__ == "__main__":
