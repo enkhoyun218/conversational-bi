@@ -140,6 +140,30 @@ def rename_dashboard(dashboard_id: str, new_title: str) -> bool:
     return False
 
 
+def reorder_chart_ids(dashboard_id: str, new_order: list[str]) -> bool:
+    """Set a dashboard's chart display order.
+
+    `new_order` must have no duplicates and every id in it must already
+    be in the dashboard's current chart_ids -- but it doesn't need to be
+    the *full* set. Callers build new_order from whatever charts they
+    could actually render, so this doubles as opportunistic cleanup: a
+    stale id (its chart was deleted elsewhere) that isn't in new_order
+    just gets dropped, rather than reordering being blocked by it.
+
+    Returns True if the dashboard existed and new_order was valid.
+    """
+    dashboards = _load_dashboards()
+    for dashboard in dashboards:
+        if dashboard["id"] == dashboard_id:
+            current_ids = set(dashboard["chart_ids"])
+            if len(new_order) != len(set(new_order)) or not set(new_order) <= current_ids:
+                return False
+            dashboard["chart_ids"] = new_order
+            _save_dashboards(dashboards)
+            return True
+    return False
+
+
 if __name__ == "__main__":
     from chart import suggest_chart
     from db import get_connection, get_schema

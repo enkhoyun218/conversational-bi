@@ -147,17 +147,34 @@ def render_ask_view() -> None:
             st.dataframe(df, use_container_width=True)
 
 
-def render_chart_grid(charts: list[dict], cols_per_row: int = 2, show_delete: bool = False) -> None:
+def _move_chart(dashboard_id: str, ordered_charts: list[dict], position: int, delta: int) -> None:
+    """Swap the chart at `position` with its neighbor `delta` away (-1 or
+    +1) and persist the resulting order for this dashboard."""
+    new_order = [c["id"] for c in ordered_charts]
+    swap_with = position + delta
+    new_order[position], new_order[swap_with] = new_order[swap_with], new_order[position]
+    store.reorder_chart_ids(dashboard_id, new_order)
+
+
+def render_chart_grid(
+    charts: list[dict],
+    cols_per_row: int = 2,
+    show_delete: bool = False,
+    dashboard_id: str | None = None,
+) -> None:
     """Render a grid of chart cards: name, a live-refreshed chart (its
-    SQL re-runs against DuckDB right here), and an optional delete
-    button. Shared by "Saved Charts" and the dashboard view below --
+    SQL re-runs against DuckDB right here), and optional delete/reorder
+    controls. Shared by "Saved Charts" and the dashboard view below --
     both are "show these charts in a grid," they just differ in which
-    subset of charts and whether delete makes sense.
+    subset of charts and which per-card controls make sense (deleting a
+    chart is a Saved Charts action; reordering only makes sense with a
+    dashboard's own ordering to write back to).
     """
     for row_start in range(0, len(charts), cols_per_row):
         row = charts[row_start : row_start + cols_per_row]
         cols = st.columns(cols_per_row)
-        for col, chart in zip(cols, row):
+        for col_offset, (col, chart) in enumerate(zip(cols, row)):
+            position = row_start + col_offset
             with col, st.container(border=True):
                 st.text_input(
                     "Chart name",
@@ -179,6 +196,27 @@ def render_chart_grid(charts: list[dict], cols_per_row: int = 2, show_delete: bo
                 if show_delete and st.button("Delete", key=f"delete_{chart['id']}"):
                     store.delete_chart(chart["id"])
                     st.rerun()
+
+                if dashboard_id is not None:
+                    move_cols = st.columns(2)
+                    with move_cols[0]:
+                        if st.button(
+                            "← Move earlier",
+                            key=f"moveup_{dashboard_id}_{chart['id']}",
+                            disabled=position == 0,
+                            use_container_width=True,
+                        ):
+                            _move_chart(dashboard_id, charts, position, -1)
+                            st.rerun()
+                    with move_cols[1]:
+                        if st.button(
+                            "Move later →",
+                            key=f"movedown_{dashboard_id}_{chart['id']}",
+                            disabled=position == len(charts) - 1,
+                            use_container_width=True,
+                        ):
+                            _move_chart(dashboard_id, charts, position, 1)
+                            st.rerun()
 
 
 def render_saved_charts_view() -> None:
@@ -229,7 +267,7 @@ def render_dashboards_view() -> None:
         if not page_charts:
             st.caption("No charts on this page.")
         else:
-            render_chart_grid(page_charts)
+            render_chart_grid(page_charts, dashboard_id=page["id"])
 
     if len(dashboards) == 1:
         render_page(dashboards[0])
