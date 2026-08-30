@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 *.duckdb
 .streamlit/secrets.toml
+store/
