@@ -265,17 +265,3 @@ Ask a few, then switch to **Saved Charts** to see them persisted, or
   standing in for cloud storage, not a real Parquet-on-S3 setup. The
   DuckDB access pattern (querying files directly) generalizes to that
   case, but nothing here talks to real cloud infrastructure.
-
-## Stretch goals not implemented
-
-Given the time box, these were left out:
-
-- Clarifying questions for ambiguous requests (rather than picking one
-  interpretation silently, as noted above).
-- A dedicated "what data is available?" conversational helper — the
-  sidebar's static schema listing covers the same need at a fraction of
-  the complexity.
-- Manually moving a single chart from one dashboard page to another,
-  without a full AI regroup. (A full regroup already exists — clicking
-  "Build Dashboard" again re-groups from the current saved-chart set —
-  this would just be a finer-grained, human-driven alternative to that.)
